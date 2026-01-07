@@ -41,15 +41,6 @@ pass ages work
 
 Note that this command can be very slow as it likely has to decrypt multiple versions of each password file.
 
-### Get help
-
-```shell_session
-pass age --help
-pass ages --help
-```
-
-This will show you how to use the commands... but not much more. Sorry.
-
 ## Advanced usage
 
 ### Show password ages of all passwords, sorted by age, youngest first

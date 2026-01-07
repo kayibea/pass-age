@@ -1,23 +1,26 @@
-#!/bin/bash
+#!/usr/bin/env bash
+set -euo pipefail
 
-help_ages() {
-  echo "Usage:"
-  echo "    pass ages"
-  echo "        Show ages of all passwords in the store"
-  echo "    pass ages SUBDIR"
-  echo "        Show ages of all passwords in a certain subdirectory in the store"
-  exit 0
-}
-
-if [ "$1" == "--help" ]
-then
-  help_ages
+if [[ $# -gt 1 ]]; then
+  echo "Usage: pass ages [subfolder]" >&2
+  exit 1
 fi
 
-PREFIX="${PASSWORD_STORE_DIR:-$HOME/.password-store}"
-SUBDIR="${1:-.}"
+folder="${1:-.}"
+store="${PASSWORD_STORE_DIR:-$HOME/.password-store}"
 
-cd $PREFIX && find $SUBDIR -name "*.gpg" | sed 's/^\.\///' | sed 's/\.gpg$//' | while read path
-do
-  pass age "$path"
-done
+cd "$store"
+
+if [[ ! -d "$folder" ]]; then
+  echo "Error: folder '$folder' does not exist in store '$store'" >&2
+  exit 1
+fi
+
+while IFS= read -r -d '' file; do
+  file="${file#./}"
+  file="${file%.gpg}"
+  pass age "$file"
+done < <(
+  find "$folder" -type f -name '*.gpg' -not -path '*/.*' -print0 |
+    sort -z
+)
