@@ -61,13 +61,6 @@ done < <(
   '
 )
 
-# never changed → use first commit where file exists
-first_commit="$(
-  git log --follow --pretty=format:'%H' --name-status -- "$file" |
-    awk '
-    /^[0-9a-f]{40}$/ { commit=$0 }
-    END { print commit }
-  '
-)"
+first_commit="$(git log --follow --format='%H' -- "$file" | tail -n 1)"
 
 print_commit_info "$first_commit"
