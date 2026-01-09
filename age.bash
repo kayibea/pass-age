@@ -13,43 +13,61 @@ cd "$store"
 git rev-parse --is-inside-work-tree >/dev/null
 
 decrypt_first_line() {
-  "$GPG" "${GPG_OPTS[@]}" --decrypt 2>/dev/null | sed -n '1p' || true
+  local out
+  if ! out="$("$GPG" "${GPG_OPTS[@]}" --decrypt 2>/dev/null)"; then
+    return 1
+  fi
+
+  sed -n '1p' <<<"$out" | tr -d '\n\r'
 }
 
 get_password_hash() {
-  decrypt_first_line |
-    sha1sum |
-    cut -d' ' -f1
+  local password
+  if ! password="$(decrypt_first_line)"; then
+    return 1
+  fi
+
+  printf '%s' "$password" | sha1sum | cut -d' ' -f1
+}
+
+print_commit_info() {
+  local commit=$1
+  git show -s --format='%ct%x09%cr%x09'"${file%.*}" "$commit"
 }
 
 head_hash="$(
   git show "HEAD:$file" 2>/dev/null |
     get_password_hash
 )" || {
-  echo "Error: $file does not exist at HEAD" >&2
+  echo "Error: $file does not exist at HEAD or decryption failed" >&2
   exit 1
 }
 
-last_change=""
-
-while read -r commit; do
+while read -r commit path; do
   hash="$(
-    git show "$commit:$file" 2>/dev/null |
+    git show "$commit:$path" 2>/dev/null |
       get_password_hash
-  )" ||
-    continue
+  )" || continue
 
   if [[ "$hash" != "$head_hash" ]]; then
-    last_change="$commit"
-    break
+    print_commit_info "$commit"
+    exit 0
   fi
-done < <(git log --format=%H -- "$file")
+done < <(
+  git log --follow --pretty=format:'%H' --name-status -- "$file" |
+    awk '
+    /^[0-9a-f]{40}$/ { commit=$0; next }
+    /^[AMD]/ { print commit, $2 }
+  '
+)
 
 # never changed → use first commit where file exists
-if [[ -z "$last_change" ]]; then
-  last_change="$(
-    git log --format=%H --reverse -- "$file" | head -n1
-  )"
-fi
+first_commit="$(
+  git log --follow --pretty=format:'%H' --name-status -- "$file" |
+    awk '
+    /^[0-9a-f]{40}$/ { commit=$0 }
+    END { print commit }
+  '
+)"
 
-git show -s --format='%ct%x09%cr%x09'"${file%.*}" "$last_change"
+print_commit_info "$first_commit"
